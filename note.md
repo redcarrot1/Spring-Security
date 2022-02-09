@@ -63,7 +63,7 @@ public class SecurityController {
 
 우리가 이 페이지를 만든 적이 있나? 없다.
 
-그럼 누가 이 페이지를 만들어서 로그인하게 만드는 것인가.. 바로 스프링 시큐리티다.
+그럼 누가 이 페이지를 만들어서 로그인하게 만드는 것인가. 바로 스프링 시큐리티다.
 
 
 
@@ -176,13 +176,13 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         http.authorizeRequests()
                 .anyRequest().authenticated();
 
-        http.formLogin()
-                //.loginPage("/loginPage") // 사용자 정의 로그인 페이지, default: /login
+        http.formLogin() // form 로그인 인증 기능이 작동함
+                .loginPage("/loginPage") // 사용자 정의 로그인 페이지, default: /login
                 .defaultSuccessUrl("/") // 로그인 성공 후 이동 페이지
                 .failureUrl("/login") // 로그인 실패 후 이동 페이지
                 .usernameParameter("userId") // 아이디 파라미터명 설정, default: username
                 .passwordParameter("passwd") // 패스워드 파라미터명 설정, default: password
-                .loginProcessingUrl("/login_proc") // 로그인 Form Action Url
+                .loginProcessingUrl("/login_proc") // 로그인 Form Action Url, default: /login
                 .successHandler( // 로그인 성공 후 핸들러
                         new AuthenticationSuccessHandler() { // 익명 객체 사용
                             @Override
@@ -199,12 +199,69 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                                 response.sendRedirect("/login");
                             }
                         })
-                .permitAll();
+                .permitAll(); // loginPage 접근은 인증 없이 접근 가능
     }
 }
 ```
 
 
 
+```java
+.usernameParameter("userId") // 아이디 파라미터명 설정, default: username
+.passwordParameter("passwd") // 패스워드 파라미터명 설정, default: password
+.loginProcessingUrl("/login_proc") // 로그인 Form Action Url
+```
 
+위 3개는 html의 `<form>` 태그와 맞춰야 한다.
+
+
+
+
+
+### form 인증 과정(`UsernamePasswordAuthenticationFilter`)
+
+1. `AntPathRequestMatcher(/login)` : 로그인 요청이 올바른 url로 들어왔는지 확인(`loginProcessingUrl()`로 커스텀 가능)
+2. `Authentication` 객체 생성(Username과 password를 담음)
+3. 위에서 만든 객체를 이용해 `AuthenticationManager`에서 인증처리 (내부적으로 `AuthenticationProvider`에게 인증 위임)
+   - 인증 실패시 `AuthenticationExcepion`
+   - 인증 성공시 `Authentication`객체를 만들어서 리턴(User 정보와 권한 정보 등을 담음)
+4. `Authentication`객체를 `SecurityContext`에 저장 -> Session에 저장(전역으로 사용 가능하게 함)
+5. `SuccessHandler` 실행
+
+
+
+
+
+### Logout
+
+- 세션 무효화, 인증토큰 삭제, 쿠키 정보 삭제, 로그인 페이지로 리다이렉트
+
+```java
+http.logout() // 로그아웃 기능 작동함
+  .logoutUrl("/logout") // 로그아웃 처리 URL, default: /logout, 원칙적으로 post 방식만 지원
+  .logoutSuccessUrl("/login") // 로그아웃 성공 후 이동페이지
+  .deleteCookies("JSESSIONID", "remember-me") // 로그아웃 후 쿠키 삭제
+  .addLogoutHandler(new LogoutHandler() { // 로그아웃 핸들러
+    @Override
+    public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
+      HttpSession session = request.getSession();
+      session.invalidate(); // 세션 무효화
+    }
+  })
+  .logoutSuccessHandler(new LogoutSuccessHandler() {// 로그아웃 성공 후 핸들러
+    @Override
+    public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+      response.sendRedirect("/login");
+    }
+  });
+```
+
+
+
+### Logout 로직(`LogoutFilter`)
+
+1. `AntPathRequestMatcher(/logout)` : 로그아웃 요청이 올바른 url로 들어왔는지 확인(`logoutUrl()`로 커스텀 가능)
+2. `SecurityContext`에서 `Authentication`객체를 꺼내 `SecurityContextLogoutHandler`에게 전달
+3. `SecurityContextLogoutHandler`가 세션 무효화, 쿠키 삭제, `Authentication=null`, `SecurityContextHolder.clearContext()` 등을 진행
+4. 로그아웃이 성공되면 `SimpleUrlLogoutSuccessHandler`을 통해 특정 페이지로 redirect
 
