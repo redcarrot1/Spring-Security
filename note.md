@@ -2,6 +2,21 @@
 
 
 
+> 본 게시물은 스스로의 공부를 위한 글입니다.
+> 잘못된 내용이 있으면 댓글로 알려주세요!
+
+
+
+---
+
+####  Reference
+
+인프런 '스프링 시큐리티 - Spring Boot 기반으로 개발하는 Spring Security' (정수원)
+
+
+
+
+
 ## 프로젝트 생성하기
 
 먼저 dependency로 `spring-boot-starter-web`만 선택 한 후 스프링 프로젝트를 생성하자.
@@ -221,7 +236,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 ### form 인증 과정(`UsernamePasswordAuthenticationFilter`)
 
 1. `AntPathRequestMatcher(/login)` : 로그인 요청이 올바른 url로 들어왔는지 확인(`loginProcessingUrl()`로 커스텀 가능)
-2. `Authentication` 객체 생성(Username과 password를 담음)
+2. 인증객체(`Authentication`) 객체 생성(Username과 password를 담음)
 3. 위에서 만든 객체를 이용해 `AuthenticationManager`에서 인증처리 (내부적으로 `AuthenticationProvider`에게 인증 위임)
    - 인증 실패시 `AuthenticationExcepion`
    - 인증 성공시 `Authentication`객체를 만들어서 리턴(User 정보와 권한 정보 등을 담음)
@@ -265,3 +280,71 @@ http.logout() // 로그아웃 기능 작동함
 3. `SecurityContextLogoutHandler`가 세션 무효화, 쿠키 삭제, `Authentication=null`, `SecurityContextHolder.clearContext()` 등을 진행
 4. 로그아웃이 성공되면 `SimpleUrlLogoutSuccessHandler`을 통해 특정 페이지로 redirect
 
+
+
+
+
+
+
+### Remember Me 인증
+
+1. 세션이 만료되고 웹 브라우저가  종료된 후에도 어플리케이션이 사용자를 기억하는 기능
+2. Remember-Me 쿠키에 대한 Http 요청을 확인한 후 토큰 기반 인증을 사용해 유효성을 검사하고 토큰이 검증되면 사용자는 로그인 된다.
+3. 사용자 라이프 사이클
+   - 인증 성공(Remember-Me 쿠키 발급)
+   - 인증 실패(remember-me 쿠키가 존재하면 쿠키 무효화)
+   - 로그아웃(쿠키가 존재하면 쿠키 무효화)
+
+
+
+```java
+http.rememberMe() // rememberMe 기능 작동함
+  .rememberMeParameter("remember") // default: remember-me, checkbox 등의 이름과 맞춰야함
+  .tokenValiditySeconds(3600) // 쿠키의 만료시간 설정(초), default: 14일
+  .alwaysRemember(false) // 사용자가 체크박스를 활성화하지 않아도 항상 실행, default: false
+  .userDetailsService(userDetailsService); // 기능을 사용할 때 사용자 정보가 필요함. 반드시 이 설정 필요함.
+```
+
+
+
+- Remember Me를 체크하지 않고 로그인 해보자.
+- 로그인 쿠키로 JSESSIONID가 response된다. 세션 쿠키 방식으로, 로그인을 인증할 때 사용된다.
+- 하지만 세션이 만료되거나 웹 브라우저를 닫거나 등으로 쿠키가 없어진다면? 다시 로그인 해야한다.
+
+
+
+- Remember Me를 체크 후 로그인 해보자.
+-  말고도 remember-me 라는 쿠키가 날라왔다.
+- 이 쿠키에는 회원 아이디와 비밀번호 등이 인코딩 되어 들어있다. 따라서 JSESSIONID이 다른 요인에 의해 삭제되거나 request header에 보내지 않더라도 서버에서는 회원 인증을 하고, 실제 회원과 일치한 정보가 있다면 자동로그인+JSESSIONID 쿠키를 만들어서 보내준다.
+
+
+
+
+
+
+
+### RememberMe 로직 (RememberMeAuthenticationFilter)
+
+이 필터가 실행될 조건은 다음과 같다.
+
+1. 스프링 시큐리티에서 사용하는 인증객체(`Authentication`)가 Security Context에 없어야 함
+   - 세션 만료(time out), 브라우저 종료, 세션id 자체를 모르는 등의 요인이 있다. 인증객체가 있다라는 소리는 로그인이 정상적으로 되었고, 회원 정보도 정상적으로 세션에서 찾을 수 있다라는 이야기이다. 따라서 이 필터가 실행될 필요가 없다.
+2. 사용자 request header에 remember-me 쿠키 토큰이 존재해야 한다.
+
+
+
+실행 조건이 부합하다면 RememberMeService(인터페이스)가 실행된다. 실제 구현체 2가지 있는데, 그 차이는 다음과 같다.
+
+1. `TokenBasedRememberMeServices`:  서버 메모리에 있는 쿠키와 사용자가 보내온 remember-me 쿠키를 비교(기본적으로 14일간 존재)
+2. `PersistentTokenBasedRememberMeServices`: DB에 저장되어 있는 쿠키와 사용자가 보내온 remember-me 쿠키를 비교(이름 그대로 persistent)
+
+
+
+다음과 같은 로직으로 진행한다.
+
+1. Token Cookie이 존재하면 추출
+2. Decode Token하여 토큰이 정상인지 판단
+3. 사용자가 들고온 토큰과 서버에 저장된 토큰이 서로 일치하는지 판단
+4. 토큰에 저장된 정보를 이용해 DB에 해당 User 계정이 존재하는지 판단
+5. 위 조건을 모두 통과하면 새로운 인증객체(`Authentication`)을 생성 후 `AuthenticationManager`에게 인증 처리를 넘긴다. (물론 Security Context에도 인증 객체를 저장한다.)
+6. 이후 response 될 때 `JSESSIONID`를 다시 보내준다.
