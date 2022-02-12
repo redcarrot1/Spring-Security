@@ -348,3 +348,124 @@ http.rememberMe() // rememberMe 기능 작동함
 4. 토큰에 저장된 정보를 이용해 DB에 해당 User 계정이 존재하는지 판단
 5. 위 조건을 모두 통과하면 새로운 인증객체(`Authentication`)을 생성 후 `AuthenticationManager`에게 인증 처리를 넘긴다. (물론 Security Context에도 인증 객체를 저장한다.)
 6. 이후 response 될 때 `JSESSIONID`를 다시 보내준다.
+
+
+
+
+
+
+
+
+
+
+
+## AnonymousAuthenticationFilter
+
+익명 사용자와 인증 사용자를 구분해서 처리하기 위한 용도로 사용한다.
+
+
+
+사용자가 request 하게 된다.
+
+위 필터가 요청을 받는다.
+
+Authentication(인증 객체)가 security context에 존재하는지 확인한다.
+
+인증 객체가 없다는건 이 사용자가 인증을 받지 못했다는 소리이다. 이 사용자를 익명 사용자로 인식하고 인증객체(Anonymous AuthenticationToken)을 발급해서 SecurityContext 안에 인증 객체를 저장한다.
+
+스프링 시큐리티는 여러 곳에서 현재 사용자가 익명 사용자인지 검사할 수 있는데, 이 때 위 토큰 타입인지로 판단한다.
+
+
+
+화면에서 인증 여부를 구현할 때 isAnonymous()와 isAuthenticated()로 구분해서 사용한다.
+
+예를 들어 isAnonymous==true 이면 화면 상단을 로그인 버튼으로 노출시키고, isAuthenticated==true이면 로그아웃 버튼으로 노출시킨다.
+
+인증 객체를 세션에 저장하지 앟는다.
+
+
+
+
+
+
+
+
+
+## 동시 세션 제어
+
+동일한 계정으로 로그인 되었을 때, 그 세션을 관리하는 정책이다.
+
+만약 최대 세션 허용 개수를 초과했다 가정하자.
+
+두 가지 방법이 있다.
+
+1. 이전 사용자를 세션 만료시킨다.
+![스크린샷 2022-02-12 오후 5.28.10](/Users/hongseungtaeg/Desktop/inflearn spring security/스크린샷 2022-02-12 오후 5.28.10.png)
+
+
+
+2. 현재 사용자 인증 실패
+![스크린샷 2022-02-12 오후 5.28.10](/Users/hongseungtaeg/Desktop/inflearn spring security/스크린샷 2022-02-12 오후 5.28.17.png)
+
+
+
+
+
+```java
+http.sessionManagement() // 세션 관리 기능이 작동
+  .maximumSessions(1) // 최대 허용 가능 세션 수, -1=무제한 로그인 세션 허용
+  .maxSessionsPreventsLogin(true) // 동시 로그인 차단함, default: false(기존 세션 만료)
+```
+
+
+
+
+
+
+
+## 세션 고정 보호
+
+인증에 성공할 때마다 세션을 다시 만들고, 쿠키도 새롭게 발급 = 세션 고정 보호
+
+공격자가 사용자의 쿠키를 탈취해도 사용자의 쿠키는 계속 달라지기 때문에 그나마 괜찮다..?
+
+
+
+기본값으로는 `.changeSessionId()`: 인증 때마다 세션 아이디를 변경, 서블릿 3.1 이상부터 지원
+
+`migrateSession`: 서블릿 3.1 밑에서 지원
+
+`newSession`: 세션을 완전히 새롭게 설정. 세션 id는 당연히 달라짐
+
+`none`: 세션 재생성x, 사용 안하는 꼴임.
+
+따로 설정하지 않아도 기본적으로 스프링 시큐리티가 자동으로 설정해준다.
+
+```java
+http
+  .sessionManagement()
+  .sessionFixation().none();
+```
+
+
+
+
+
+
+
+## 세션 정책
+
+```java
+http
+  .sessionManagement()
+  .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED);
+```
+
+SessionCreationPolicy.Always : 스프링 시큐리티가 항상 세션 생성
+
+SessionCreationPolicy.If_Required : 스프링 시큐리티가 필요 시 생성(기본값)
+
+SessionCreationPolicy.Never : 스프링 시큐리티가 생성하지 않지만 이미 존재하면 사용
+
+SessionCreationPolicy.Stateless : 스프링 시큐리티가 생성하지 않고 존재해도 사용하지 않음(JWT을 사용할 때 사용)
+

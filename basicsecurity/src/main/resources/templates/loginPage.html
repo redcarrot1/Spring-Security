@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <title>Spring security</title>
+</head>
+
+<body>
+<form action="/login_proc" method="post">
+    <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}" />
+    <input type="text" name="userId" />
+    <input type="password" name="passwd" />
+    <button type="submit">전송</button>
+</form>
+</body>
+</html>
