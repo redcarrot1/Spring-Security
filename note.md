@@ -180,6 +180,10 @@ spring.security.user.password=1111
 
 
 
+
+
+# 인증
+
 ## Form Login 인증
 
 ```java
@@ -469,3 +473,105 @@ SessionCreationPolicy.Never : 스프링 시큐리티가 생성하지 않지만 �
 
 SessionCreationPolicy.Stateless : 스프링 시큐리티가 생성하지 않고 존재해도 사용하지 않음(JWT을 사용할 때 사용)
 
+
+
+
+
+
+
+## SessionManagementFilter 정리
+
+1. 세션 관리: 인증 시 사용자의 세션정보를 등록, 조회, 삭제 등의 세션 이력을 관리
+2. 동시적 세션 제어: 동일 계정으로 접속이 허용되는 최대 세션수를 제한
+3. 세션 고정 보호: 인증 할 때마다 세션쿠키를 새로 발급하여 공격자의 쿠키 조작을 방지
+4. 세션 생성 정책: Always, If_Required, Never, Stateless
+
+
+
+
+
+## ConcurrentSessionFilter
+
+- `SessionManagementFilter `와 함께 동시적 세션 제어
+- 매 요청 마다 현재 사용자의 세션 만료 여부 체크
+- 세션이 만료되었을 경우 즉시 만료 처리
+- `session.isExpired()==true`
+  - 로그아웃 처리
+  - 즉시 오류 페이지 응답(This session has been expired)
+
+![](C:\Users\s_gmtmoney2357\Desktop\인프런\Spring Security\sessionManagementFilter.PNG)
+
+
+
+
+
+## 인증 과정(인증이 필요한 자원에 접근할 경우)
+
+1. `UsernamePasswordAuthenticationFilter` 에서 인증한다.
+2. 인증에 성공했다면 그 세션에 대한 정보를 `ConcurrentSessionFilter`에서 확인한다. 만약 `session.isExpired()==true`라면 세션이 만료 된것이므로, 로그아웃하고 오류 페이지를응답한다.
+3. `ConcurrentSessionControlAuthenticationStrategy`에서 로그인 계정의 세션이 몇개 있나 확인한다. 만약  maxSessions와 동일하다면 2가지 전략을 사용할 수 있다. 인증 실패 전략의 경우 `SessionAuthenticationException`을 통해 현재 로그인 인증을 실패한다. 세션 만료 전략의 경우 전에 등록된 세션을 `session.expireNow()`한다.
+4. `ChangeSessionIdAuthenticationStrategy`에서 세션ID를 변경한다(세션 고정 보호)
+5. `RegisterSessionAuthenticationStrategy`에서 현재 로그인 계정의 세션을 등록한다.
+
+![](C:\Users\s_gmtmoney2357\Desktop\인프런\Spring Security\인증 과정.PNG)
+
+
+
+
+
+
+
+
+
+
+
+# 인가
+
+## 권한 설정 및 표현식
+
+- 선언적 방식
+  - URL: http.antMatchers("/users/**").hasRole("USER")
+  - Method: @PreAuthorize("hasRole('USER')") public void user(){ ~ }
+- 동적 방식 - DB 연동 프로그래밍
+  - URL
+  - Method
+
+
+
+
+
+
+
+
+
+### 1. 선언적 방식: URL
+
+```java
+http
+    .antMatcher("/shop/**") // 이 경로의 요청들에 대해 아래 설정 적용. 생략하면 모든 요청에 대해 적용
+    .authorizeRequests()
+     .antMatchers("/shop/login", "/shop/users/**").permitAll()
+     .antMatchers("/shop/mypage").hasRole("USER")
+     .antMatchers("/shop/admin/pay").access("hassRole('ADMIN')")
+     .antMatchers("/shop/admin/**").access("hasRole('ADMIN') or hasRole('SYS')")
+     .anyRequest().authenticated(); // 나머지 요청들에 대해서는 인증 필요.
+/** 주의 사항 - 구체적인 경로가 먼저 오고, 그것보다 큰 범위의 경로가 뒤에 오도록 해야 한다. **/
+/** 위에서부터 해석하면서 인증하기 때문에 그렇다. **/
+```
+
+권한을 설정할 때 표현식을 사용할 수 있다.
+
+| 메소드                         | 동작                                                      |
+| ------------------------------ | --------------------------------------------------------- |
+| **authenticated()**            | 인증된 사용자의 접근을 허용                               |
+| **fullyAuthenticated()**       | 인증된 사용자의 접근을 허용,  rememberMe 인증 제외        |
+| **permitAll()**                | 무조건 접근을 허용                                        |
+| **denyAll()**                  | 무조건 접근을 허용하지 않음                               |
+| **anonymous()**                | 익명사용자의 접근을 허용                                  |
+| **rememberMe()**               | 기억하기를 통해 인증된 사용자의 접근을 허용               |
+| **access(String)**             | 주어진 SpEL 표현식의 평가 결과가 true이면 접근을 허용     |
+| **hasRole(String)**            | 사용자가 주어진 역할이 있다면 접근을 허용   (ex USER)     |
+| **hasAuthority(String)**       | 사용자가 주어진 역할이 있다면 접근을 허용 (ex Role_USER)  |
+| **hasAnyRole(String...)**      | 사용자가 주어진 권한이 있다면 접근을 허용                 |
+| **hasAnyAuthority(String...)** | 사용자가 주어진 권한 중 어떤 것이라도 있다면  접근을 허용 |
+| **hasIpAddress(String)**       | 주어진 IP로부터 요청이 왔다면 접근을 허용                 |
