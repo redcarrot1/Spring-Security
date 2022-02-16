@@ -575,3 +575,73 @@ http
 | **hasAnyRole(String...)**      | 사용자가 주어진 권한이 있다면 접근을 허용                 |
 | **hasAnyAuthority(String...)** | 사용자가 주어진 권한 중 어떤 것이라도 있다면  접근을 허용 |
 | **hasIpAddress(String)**       | 주어진 IP로부터 요청이 왔다면 접근을 허용                 |
+
+
+
+
+
+
+
+## 예외 처리 및 요청 캐시 필터
+
+### ExceptionTranslationFilter
+
+#### AuthenticationException(인증 예외 처리)
+
+1. AuthenticationEntryPoint 호출: 로그인 페이지 이동, 401 오류 코드 전달 등
+2. 인증 예외가 발생하기 전의 요청 정보를 저장
+   - SavedRequest : 사용자가 요청했던 request 파라미터 값들, 그 당시의 헤더값들 등이 저장
+   - RequestCache : 사용자의 이전 요청 정보를 세션에 저장하고 이를 꺼내 오는 캐시 메커니즘
+
+
+
+#### AccessDeniedException(인가 예외 처리)
+
+- AccessDeniedHandler에서 예외 처리하도록 제공
+
+
+
+![](C:\Users\s_gmtmoney2357\Desktop\인프런\Spring Security\exceptionFilter.PNG)
+
+
+
+
+
+```java
+http.exceptionHandling() // 예외 처리 기능 작동
+                .authenticationEntryPoint(authenticationEntryPoint()) // 인증 실패시 처리
+                .accessDeniedHandler(accessDeniedHandler()) // 인가 실패시 처리
+```
+
+`authenticationEntryPoint()`, `accessDeniedHandler()`에는 구현체를 넣으면 된다.
+
+익명 구현체를 사용하면 다음과 같다. 이때 `http.successHandler`와 함께 사용한다면 로그인 후 원래 가려던 페이지로 이동할 수 있다. (원래 가려던 페이지 등의 정보는 `RequestCache`에 저장되어 있다.)
+
+```java
+http.formLogin()
+    .successHandler(new AuthenticationSuccessHandler() {
+        @Override
+        public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+            RequestCache requestCache = new HttpSessionRequestCache();
+            SavedRequest savedRequest = requestCache.getRequest(request, response);
+            String redirectUrl = savedRequest.getRedirectUrl();
+            response.sendRedirect(redirectUrl);
+        }
+    });
+
+http.exceptionHandling() // 예외 처리 기능 작동
+    .authenticationEntryPoint(new AuthenticationEntryPoint() {
+        @Override
+        public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
+            response.sendRedirect("/login");
+        }
+    })
+    .accessDeniedHandler(new AccessDeniedHandler() {
+
+        @Override
+        public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException, ServletException {
+            response.sendRedirect("/denied");
+        }
+    });
+```
+
