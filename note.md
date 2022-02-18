@@ -645,3 +645,32 @@ http.exceptionHandling() // 예외 처리 기능 작동
     });
 ```
 
+
+
+
+
+
+
+### CSRF(사이트 간 요청 위조)
+
+1. 사용자가 정상적으로 쇼핑몰에 로그인 후 쿠키를 받아온다.
+2. 공격자가 이용자에게 특정 링크를 클릭하게 만든다. 이때 그 링크는 쇼핑몰의 도메인과 같다.
+3. 사용자의 브라우저는 사용자가 클릭한 링크가 쇼핑몰이므로 정상적으로 쿠키까지 전달하면서 접속하게 된다.
+4. 쇼핑몰은 정상적인 접근으로 알고, 처리해준다.
+
+
+
+스프링 시큐리티는 CsrfFilter을 통해서 이를 방지한다.
+
+모든 요청에 랜덤하게 생성된 토큰을 HTTP 파라미터로 요구한다.
+
+요청시 전달되는 토큰 값과 서버에 저장된 실제 값을 비교한 후 일치하지 않으면 요청은 실패한다.
+
+
+
+- Client
+  - `<input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"`
+  - HTTP 메소드: PATCH, POST, PUT, DELETE
+- Spring Security
+  - http.csrf(): default=활성화
+  - http.csrf().disabled() : 비활성화
