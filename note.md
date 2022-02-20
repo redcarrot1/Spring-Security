@@ -674,3 +674,47 @@ http.exceptionHandling() // 예외 처리 기능 작동
 - Spring Security
   - http.csrf(): default=활성화
   - http.csrf().disabled() : 비활성화
+
+
+
+
+
+
+
+### DelegatingProxyChain
+
+Spring Bean은 Servlet Filter에 Injection이 불가능하다. (컨테이너가 서로 다르기 때문이다.)
+
+그럼 스프링으로 만든 필터와 Servlet Filter을 어떻게 연결할까? 바로 DelegatingFilterProxy이다.
+
+DelegatingFilterProxy는 Servlet Filter이다. 요청을 받게되면 Spring Bean에게 요청을 위임하게 된다.
+
+따라서 Spring 기술도 사용하면서 Filter역할로도 사용할 수 있게 된다.
+
+만약 스프링 시큐리티를 사용한다면 springSecurityFilterChain으로 생성된 빈을 ApplicationContext에서 찾아서 요청을 위임하게 된다.
+
+
+
+
+
+### FilterChainProxy
+
+springSecurityFilterChain으로 생성되는 필터 빈은 FilterChainProxy이다.
+
+즉, DelegatingFilterProxy에게 요청을 위임 받고 실제 보안 처리를 하는 필터이다.
+
+
+
+스프링 시큐리티가 기본적으로 생성하는 필터도 있고, 설정 클래스에서 사용자가 API 추가 시 생성되는 필터도 있다.
+
+필터들은 Chain으로 연결되어 있기 때문에, 사용자의 요청을 필터 순서대로 호출하여 전달하게 된다.
+
+물론 사용자 정의 필터를 생성해서 기존의 필터 전, 후로 추가할 수 있다.
+
+마지막 필터까지 인증 및 인가 예외가 발생하지 않으면 보안이 통과하게 된다. 즉, Servlet으로 넘어가게 된다.
+
+
+
+
+
+![스크린샷 2022-02-20 오후 11.42.38](/Users/hongseungtaeg/Desktop/스크린샷 2022-02-20 오후 11.42.38.png)
