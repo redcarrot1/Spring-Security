@@ -718,3 +718,82 @@ springSecurityFilterChain으로 생성되는 필터 빈은 FilterChainProxy이�
 
 
 ![스크린샷 2022-02-20 오후 11.42.38](/Users/hongseungtaeg/Desktop/스크린샷 2022-02-20 오후 11.42.38.png)
+
+
+
+
+
+### 필터 초기화와 다중 설정 클래스
+
+보안 설정 파일을 분리해서 여러개 작성할 수 있다.
+그러면 FilterChainProxy에 필터들이 List형태로 들어가게 되는데, 순서대로 설정파일의  RequestMacher와 현재 요청한 url이 부합한지 확인한다. 만약 적용 대상이라면 해당 필터를 진행하게 된다.
+
+
+
+
+#### 실전코드
+설정 클래스를 2개 작성해보자.
+```java
+@Configuration
+@EnableWebSecurity
+@Order(0)
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .antMatcher("/admin/**")
+                .authorizeRequests()
+                .anyRequest().authenticated()
+        .and()
+                .httpBasic();
+
+    }
+}
+
+@Configuration
+@Order(1)
+class SecurityConfig2 extends WebSecurityConfigurerAdapter{
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+                .authorizeRequests()
+                .anyRequest().permitAll()
+                .and()
+                .formLogin();
+    }
+}
+
+```
+
+
+FilterChainProxy에서 `List<Filter> getFilters(HttpServletRequest request)`에 break point를 놓고 디버깅을 해보면 아래와 같이 필터 체인 리스트에 우리가 등록한 2개의 필터가 넣어져 있는 것을 확인할 수 있다.
+
+![스크린샷 2022-02-21 오전 11.00.43](/Users/hongseungtaeg/Desktop/inflearn spring security/스크린샷 2022-02-21 오전 11.00.43.png)
+
+
+
+`requestMatcher`을 보면 Index 0에는 `pattern=‘/admin/**’`가 있고, Index 1에는 `any request`가 있다. 스프링 시큐리티는 for 문을 돌면서 해당 pattern에 맞는 필터를 찾아 리턴하게 된다.
+
+설정 클래스를 보면 `@Order( 숫자 )`를 찾을 수 있다. 숫자가 작을 수록 우선순위가 높은건데, 필터 체인 리스트에 들어가는 순서이다.
+
+다음과 같은 예시를 보자.
+@Order(0) config1 : antMatcher(“/admin”)
+@Order(1) config2 : anyRequest
+
+1. `/admin`으로 접속 : config1 실행
+2. `/`으로 접속 : config2 실행
+
+
+@Order(1) config1 : antMatcher(“/admin”)
+@Order(0) config2 : anyRequest
+
+1. `/admin`으로 접속 : config1 실행
+2. `/`으로 접속 : config1 실행
+
+
+
+
+먼저 부합하는 필터 체인을 실행하기 때문에 @Order로 순서를 정하는 것이 중요하다. (어노테이션이 없으면 오류난다.) 주로 좁은 범위(구체적인 경로)에게 우선순위를 높게 주는것이 일반적이다.
+
+
+사실 하나의 SecurityConfig로도 구성이 가능하기는 하다만, 설정 클래스를 여러개로 나눔으로써 확장성 면에서 이점이 있다. 인증 방식을 완전히 다른 방식으로 설정하거나, 여러가지 필터나 보안 옵션 또한 다양하게 설정이 가능하다. 사용자 보안과 관리자 보안을 나누거나 도메인 별로 나누어서 관리할 수 있다.
